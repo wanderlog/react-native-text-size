@@ -169,6 +169,23 @@ RCT_EXPORT_METHOD(flatHeights:(NSDictionary * _Nullable)options
 }
 
 /**
+ * Given a set of text and styling for it, fetches all the height of
+ * the bounding box for that text. On Android, this function also resolves with
+ * an array with `hasEllipsisOnAndroid`. We don't need that on iOS, so we just
+ * return the heights with nothing else.
+ *
+ * Based on `RCTTextShadowViewMeasure` of Libraries/Text/Text/RCTTextShadowView.m
+ */
+RCT_EXPORT_METHOD(flatHeightsWithHasEllipsisOnAndroid:(NSDictionary * _Nullable)options
+                    resolver:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
+{
+  NSDictionary *const _Nullable sizes = [self flatSizesInner:options rejecter:reject];
+  if (sizes == nil) return;
+  resolve(@{ @"heights": sizes[@"heights"] });
+}
+
+/**
  * Resolve with an object with info about a font built with the parameters provided by
  * the user. Rejects if the parameters are falsy or the font could not be created.
  */

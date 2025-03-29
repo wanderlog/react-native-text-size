@@ -190,10 +190,25 @@ declare module "react-native-text-size" {
     heights: number[];
   }
 
+  export interface TSFlatHeightWithHasEllipsisOnAndroid {
+    heights: number[];
+    /** Only set on Android; will always be undefined on iOS */
+    hasEllipsisOnAndroid?: boolean[];
+  }
+
   interface TextSizeStatic {
     measure(params: TSMeasureParams): Promise<TSMeasureResult>;
     flatSizes(params: TSHeightsParams): Promise<TSFlatSizes>;
     flatHeights(params: TSHeightsParams): Promise<number[]>;
+    /**
+     * On Android, React Native renders text with slightly less space when
+     * it gets truncated with an ellipsis. As such, we add an alternate output
+     * that tells us whether each piece of text had an ellipsis added when it
+     * was rendered.
+     */
+    flatHeightsWithHasEllipsisOnAndroid(
+      params: TSHeightsParams,
+    ): Promise<TSFlatHeightWithHasEllipsisOnAndroid>;
     specsForTextStyles(): Promise<{ [key: string]: TSFontForStyle }>;
     fontFromSpecs(specs?: TSFontSpecs): Promise<TSFontInfo>;
     fontFamilyNames(): Promise<string[]>;

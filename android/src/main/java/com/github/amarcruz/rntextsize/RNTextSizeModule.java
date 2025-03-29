@@ -6,7 +6,6 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.text.BoringLayout;
 import android.text.Layout;
-import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -171,7 +170,7 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     @SuppressWarnings("unused")
     @ReactMethod
     public void flatSizes(@Nullable final ReadableMap specs, final Promise promise) {
-        flatHeightsInner(specs, promise, true);
+        flatHeightsInner(specs, promise, FlatHeightsMode.sizes);
     }
 
     /**
@@ -182,7 +181,19 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     @SuppressWarnings("unused")
     @ReactMethod
     public void flatHeights(@Nullable final ReadableMap specs, final Promise promise) {
-        flatHeightsInner(specs, promise, false);
+        flatHeightsInner(specs, promise, FlatHeightsMode.heights);
+    }
+
+    /**
+     * Retrieves heights of each entry in an array of strings rendered with the same style. This
+     * also returns an array of whether each text has an ellipsis.
+     *
+     * https://stackoverflow.com/questions/3654321/measuring-text-height-to-be-drawn-on-canvas-android
+     */
+    @SuppressWarnings("unused")
+    @ReactMethod
+    public void flatHeightsWithHasEllipsisOnAndroid(@Nullable final ReadableMap specs, final Promise promise) {
+        flatHeightsInner(specs, promise, FlatHeightsMode.heightsWithHasEllipsisOnAndroid);
     }
 
     /**
@@ -278,7 +289,13 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     //
     // ============================================================================
 
-    private void flatHeightsInner(@Nullable final ReadableMap specs, final Promise promise, boolean includeWidths) {
+    private enum FlatHeightsMode {
+        heights,
+        sizes,
+        heightsWithHasEllipsisOnAndroid,
+    }
+
+    private void flatHeightsInner(@Nullable final ReadableMap specs, final Promise promise, FlatHeightsMode mode) {
         final RNTextSizeConf conf = getConf(specs, promise, true);
         if (conf == null) {
             return;
@@ -293,9 +310,9 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
         final float density = getCurrentDensity();
         final float width = conf.getWidth(density);
         final boolean includeFontPadding = conf.includeFontPadding;
-        final int textBreakStrategy = conf.getTextBreakStrategy();
 
         final WritableArray heights = Arguments.createArray();
+        final WritableArray hasEllipsisOnAndroid = Arguments.createArray();
         final WritableArray widths = Arguments.createArray();
 
         final SpannableStringBuilder sb = new SpannableStringBuilder(" ");
@@ -326,23 +343,42 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
                 layout = buildStaticLayout(conf, includeFontPadding, sb, textPaint, (int) width);
                 heights.pushDouble(layout.getHeight() / density);
 
-                if (includeWidths) {
+
+                if (mode == FlatHeightsMode.heightsWithHasEllipsisOnAndroid || mode == FlatHeightsMode.sizes) {
                     final int lineCount = layout.getLineCount();
-                    float measuredWidth = 0;
-                    for (int i = 0; i < lineCount; i++) {
-                        measuredWidth = Math.max(measuredWidth, layout.getLineMax(i));
+                    boolean lastLineHasEllipsis = layout.getEllipsisCount(lineCount - 1) > 0;
+                    hasEllipsisOnAndroid.pushBoolean(lastLineHasEllipsis);
+
+                    if (mode == FlatHeightsMode.sizes) {
+                        float measuredWidth = 0;
+                        for (int i = 0; i < lineCount; i++) {
+                            measuredWidth = Math.max(measuredWidth, layout.getLineMax(i));
+                        }
+                        widths.pushDouble(measuredWidth / density);
                     }
-                    widths.pushDouble(measuredWidth / density);
                 }
             }
 
-            if (includeWidths) {
-                final WritableMap output = Arguments.createMap();
-                output.putArray("widths", widths);
-                output.putArray("heights", heights);
-                promise.resolve(output);
-            } else {
-                promise.resolve(heights);
+            switch (mode) {
+                case sizes: {
+                    final WritableMap output = Arguments.createMap();
+                    output.putArray("widths", widths);
+                    output.putArray("heights", heights);
+                    output.putArray("hasEllipsisOnAndroid", hasEllipsisOnAndroid);
+                    promise.resolve(output);
+                    break;
+                }
+                case heights: {
+                    promise.resolve(heights);
+                    break;
+                }
+                case heightsWithHasEllipsisOnAndroid: {
+                    final WritableMap output = Arguments.createMap();
+                    output.putArray("heights", heights);
+                    output.putArray("hasEllipsisOnAndroid", hasEllipsisOnAndroid);
+                    promise.resolve(output);
+                    break;
+                }
             }
         } catch (Exception e) {
             promise.reject(E_UNKNOWN_ERROR, e);
