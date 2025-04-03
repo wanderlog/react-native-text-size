@@ -370,7 +370,7 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
                     //   text: _.times(
                     //     20,
                     //     () =>
-                    //       'This is some text that is quie long. It should wrap onto a few lines',
+                    //       'This is some text that is quite long. It should wrap onto a few lines',
                     //   ),
                     //   ...defaultTextStyle,
                     //   width: 150,
