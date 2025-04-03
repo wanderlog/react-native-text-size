@@ -185,18 +185,6 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     }
 
     /**
-     * Retrieves heights of each entry in an array of strings rendered with the same style. This
-     * also returns an array of whether each text has an ellipsis.
-     *
-     * https://stackoverflow.com/questions/3654321/measuring-text-height-to-be-drawn-on-canvas-android
-     */
-    @SuppressWarnings("unused")
-    @ReactMethod
-    public void flatHeightsWithHasEllipsisOnAndroid(@Nullable final ReadableMap specs, final Promise promise) {
-        flatHeightsInner(specs, promise, FlatHeightsMode.heightsWithHasEllipsisOnAndroid);
-    }
-
-    /**
      * See https://material.io/design/typography/#type-scale
      */
     @SuppressWarnings("unused")
@@ -292,7 +280,6 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     private enum FlatHeightsMode {
         heights,
         sizes,
-        heightsWithHasEllipsisOnAndroid,
     }
 
     private void flatHeightsInner(@Nullable final ReadableMap specs, final Promise promise, FlatHeightsMode mode) {
@@ -312,7 +299,6 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
         final boolean includeFontPadding = conf.includeFontPadding;
 
         final WritableArray heights = Arguments.createArray();
-        final WritableArray hasEllipsisOnAndroid = Arguments.createArray();
         final WritableArray widths = Arguments.createArray();
 
         final SpannableStringBuilder sb = new SpannableStringBuilder(" ");
@@ -341,13 +327,21 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
                 // Reset the SB text, the attrs will expand to its full length
                 sb.replace(0, sb.length(), text);
                 layout = buildStaticLayout(conf, includeFontPadding, sb, textPaint, (int) width);
-                heights.pushDouble(layout.getHeight() / density);
 
+                float height = layout.getHeight() / density;
 
-                if (mode == FlatHeightsMode.heightsWithHasEllipsisOnAndroid || mode == FlatHeightsMode.sizes) {
+                if (conf.numberOfLines != null || mode == FlatHeightsMode.sizes) {
                     final int lineCount = layout.getLineCount();
-                    boolean lastLineHasEllipsis = layout.getEllipsisCount(lineCount - 1) > 0;
-                    hasEllipsisOnAndroid.pushBoolean(lastLineHasEllipsis);
+
+                    if (conf.numberOfLines != null) {
+                        boolean lastLineHasEllipsis = layout.getEllipsisCount(lineCount - 1) > 0;
+                        // For unknown reasons, the text will be 2 subpixels shorter if truncated
+                        // due to numberOfLines. See the lines mentioning `numberOfLines` in the
+                        // TextHeights stories: this logic was created for those cases.
+                        if (lastLineHasEllipsis) {
+                            height -= 2 / density;
+                        }
+                    }
 
                     if (mode == FlatHeightsMode.sizes) {
                         float measuredWidth = 0;
@@ -357,26 +351,40 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
                         widths.pushDouble(measuredWidth / density);
                     }
                 }
+
+                heights.pushDouble(height);
             }
 
             switch (mode) {
                 case sizes: {
                     final WritableMap output = Arguments.createMap();
+                    // We output an object with 3 arrays instead of an array of
+                    // objects because it's much faster.
+                    //
+                    // Changing this output to arrays of objects quadrupled the
+                    // running time of flatSizes: 1000 iterations of the
+                    // following code went from 13ms to 47ms each.
+                    //
+                    // ```ts
+                    // const heightsParams: TSHeightsParams = {
+                    //   text: _.times(
+                    //     20,
+                    //     () =>
+                    //       'This is some text that is quie long. It should wrap onto a few lines',
+                    //   ),
+                    //   ...defaultTextStyle,
+                    //   width: 150,
+                    // };
+                    //
+                    // await TextSize.flatSizes(heightsParams);
+                    // ```
                     output.putArray("widths", widths);
                     output.putArray("heights", heights);
-                    output.putArray("hasEllipsisOnAndroid", hasEllipsisOnAndroid);
                     promise.resolve(output);
                     break;
                 }
                 case heights: {
                     promise.resolve(heights);
-                    break;
-                }
-                case heightsWithHasEllipsisOnAndroid: {
-                    final WritableMap output = Arguments.createMap();
-                    output.putArray("heights", heights);
-                    output.putArray("hasEllipsisOnAndroid", hasEllipsisOnAndroid);
-                    promise.resolve(output);
                     break;
                 }
             }

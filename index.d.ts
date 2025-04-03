@@ -190,25 +190,31 @@ declare module "react-native-text-size" {
     heights: number[];
   }
 
-  export interface TSFlatHeightWithHasEllipsisOnAndroid {
-    heights: number[];
-    /** Only set on Android; will always be undefined on iOS */
-    hasEllipsisOnAndroid?: boolean[];
-  }
-
   interface TextSizeStatic {
     measure(params: TSMeasureParams): Promise<TSMeasureResult>;
+
+    /**
+     * On Android, we benchmarked this to take 1.55x the time of flatHeights.
+     * Measuring the sizes for the following input 1000 times took 13.38ms vs.
+     * 8.6ms.
+     * 
+     * On iOS, this should run at roughly the same speed as flatHeights.
+     * 
+     * ```
+     * {
+     *   text: _.times(
+     *     20,
+     *     () =>
+     *       'This is some text that is quie long. It should wrap onto a few lines',
+     *   ),
+     *   ...defaultTextStyle,
+     *   width: 150,
+     * };
+     * ```
+     */
     flatSizes(params: TSHeightsParams): Promise<TSFlatSizes>;
     flatHeights(params: TSHeightsParams): Promise<number[]>;
-    /**
-     * On Android, React Native renders text with slightly less space when
-     * it gets truncated with an ellipsis. As such, we add an alternate output
-     * that tells us whether each piece of text had an ellipsis added when it
-     * was rendered.
-     */
-    flatHeightsWithHasEllipsisOnAndroid(
-      params: TSHeightsParams,
-    ): Promise<TSFlatHeightWithHasEllipsisOnAndroid>;
+
     specsForTextStyles(): Promise<{ [key: string]: TSFontForStyle }>;
     fontFromSpecs(specs?: TSFontSpecs): Promise<TSFontInfo>;
     fontFamilyNames(): Promise<string[]>;
