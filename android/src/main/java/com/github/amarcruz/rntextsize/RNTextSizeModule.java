@@ -6,7 +6,6 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.text.BoringLayout;
 import android.text.Layout;
-import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -171,7 +170,7 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     @SuppressWarnings("unused")
     @ReactMethod
     public void flatSizes(@Nullable final ReadableMap specs, final Promise promise) {
-        flatHeightsInner(specs, promise, true);
+        flatHeightsInner(specs, promise, FlatHeightsMode.sizes);
     }
 
     /**
@@ -182,7 +181,7 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     @SuppressWarnings("unused")
     @ReactMethod
     public void flatHeights(@Nullable final ReadableMap specs, final Promise promise) {
-        flatHeightsInner(specs, promise, false);
+        flatHeightsInner(specs, promise, FlatHeightsMode.heights);
     }
 
     /**
@@ -278,7 +277,12 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
     //
     // ============================================================================
 
-    private void flatHeightsInner(@Nullable final ReadableMap specs, final Promise promise, boolean includeWidths) {
+    private enum FlatHeightsMode {
+        heights,
+        sizes,
+    }
+
+    private void flatHeightsInner(@Nullable final ReadableMap specs, final Promise promise, FlatHeightsMode mode) {
         final RNTextSizeConf conf = getConf(specs, promise, true);
         if (conf == null) {
             return;
@@ -293,7 +297,6 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
         final float density = getCurrentDensity();
         final float width = conf.getWidth(density);
         final boolean includeFontPadding = conf.includeFontPadding;
-        final int textBreakStrategy = conf.getTextBreakStrategy();
 
         final WritableArray heights = Arguments.createArray();
         final WritableArray widths = Arguments.createArray();
@@ -324,25 +327,66 @@ class RNTextSizeModule extends ReactContextBaseJavaModule {
                 // Reset the SB text, the attrs will expand to its full length
                 sb.replace(0, sb.length(), text);
                 layout = buildStaticLayout(conf, includeFontPadding, sb, textPaint, (int) width);
-                heights.pushDouble(layout.getHeight() / density);
 
-                if (includeWidths) {
+                float height = layout.getHeight() / density;
+
+                if (conf.numberOfLines != null || mode == FlatHeightsMode.sizes) {
                     final int lineCount = layout.getLineCount();
-                    float measuredWidth = 0;
-                    for (int i = 0; i < lineCount; i++) {
-                        measuredWidth = Math.max(measuredWidth, layout.getLineMax(i));
+
+                    if (conf.numberOfLines != null) {
+                        boolean lastLineHasEllipsis = layout.getEllipsisCount(lineCount - 1) > 0;
+                        // For unknown reasons, the text will be 2 subpixels shorter if truncated
+                        // due to numberOfLines. See the lines mentioning `numberOfLines` in the
+                        // TextHeights stories: this logic was created for those cases.
+                        if (lastLineHasEllipsis) {
+                            height -= 2 / density;
+                        }
                     }
-                    widths.pushDouble(measuredWidth / density);
+
+                    if (mode == FlatHeightsMode.sizes) {
+                        float measuredWidth = 0;
+                        for (int i = 0; i < lineCount; i++) {
+                            measuredWidth = Math.max(measuredWidth, layout.getLineMax(i));
+                        }
+                        widths.pushDouble(measuredWidth / density);
+                    }
                 }
+
+                heights.pushDouble(height);
             }
 
-            if (includeWidths) {
-                final WritableMap output = Arguments.createMap();
-                output.putArray("widths", widths);
-                output.putArray("heights", heights);
-                promise.resolve(output);
-            } else {
-                promise.resolve(heights);
+            switch (mode) {
+                case sizes: {
+                    final WritableMap output = Arguments.createMap();
+                    // We output an object with 3 arrays instead of an array of
+                    // objects because it's much faster.
+                    //
+                    // Changing this output to arrays of objects quadrupled the
+                    // running time of flatSizes: 1000 iterations of the
+                    // following code went from 13ms to 47ms each.
+                    //
+                    // ```ts
+                    // const heightsParams: TSHeightsParams = {
+                    //   text: _.times(
+                    //     20,
+                    //     () =>
+                    //       'This is some text that is quite long. It should wrap onto a few lines',
+                    //   ),
+                    //   ...defaultTextStyle,
+                    //   width: 150,
+                    // };
+                    //
+                    // await TextSize.flatSizes(heightsParams);
+                    // ```
+                    output.putArray("widths", widths);
+                    output.putArray("heights", heights);
+                    promise.resolve(output);
+                    break;
+                }
+                case heights: {
+                    promise.resolve(heights);
+                    break;
+                }
             }
         } catch (Exception e) {
             promise.reject(E_UNKNOWN_ERROR, e);

@@ -192,8 +192,29 @@ declare module "react-native-text-size" {
 
   interface TextSizeStatic {
     measure(params: TSMeasureParams): Promise<TSMeasureResult>;
+
+    /**
+     * On Android, we benchmarked this to take 1.55x the time of flatHeights.
+     * Measuring the sizes for the following input 1000 times took 13.38ms vs.
+     * 8.6ms.
+     * 
+     * On iOS, this should run at roughly the same speed as flatHeights.
+     * 
+     * ```
+     * {
+     *   text: _.times(
+     *     20,
+     *     () =>
+     *       'This is some text that is quite long. It should wrap onto a few lines',
+     *   ),
+     *   ...defaultTextStyle,
+     *   width: 150,
+     * };
+     * ```
+     */
     flatSizes(params: TSHeightsParams): Promise<TSFlatSizes>;
     flatHeights(params: TSHeightsParams): Promise<number[]>;
+
     specsForTextStyles(): Promise<{ [key: string]: TSFontForStyle }>;
     fontFromSpecs(specs?: TSFontSpecs): Promise<TSFontInfo>;
     fontFamilyNames(): Promise<string[]>;
