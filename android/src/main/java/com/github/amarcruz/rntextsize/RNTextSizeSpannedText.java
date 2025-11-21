@@ -9,7 +9,10 @@ import android.text.style.AbsoluteSizeSpan;
 import android.text.style.MetricAffectingSpan;
 
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.views.text.CustomLineHeightSpan;
+// Changed from import com.facebook.react.views.text.CustomLineHeightSpan
+// since React Native moved the package in 0.81.5 to make it internal. We then
+// patched react-native to expose it again in the new path.
+import com.facebook.react.views.text.internal.span.CustomLineHeightSpan;
 import com.facebook.react.views.text.TextAttributes;
 
 import javax.annotation.Nonnull;
